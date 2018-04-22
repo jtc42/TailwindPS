@@ -1,0 +1,21 @@
+{
+"hosts": 
+    [
+        {
+            "url": "http://192.168.178.20", 
+            "name": "Tailwind (IIS)"
+        },
+        {
+            "url": "http://192.168.178.20:32400", 
+            "name": "Plex (Local)"
+        },
+        {
+            "url": "http://192.168.178.101/admin", 
+            "name": "PiHole (JTCSVR-PIHOLE)"
+        }, 
+		{
+            "url": "https://www.jtcollins.net", 
+            "name": "jtcollins.net (JTCSVR-PORYGON2)"
+        }
+    ]
+}
