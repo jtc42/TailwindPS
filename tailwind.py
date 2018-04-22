@@ -142,6 +142,9 @@ def vm_str():
 
 ##### GLOBAL THINGS ######
 
+# Version name
+VERSION = "TailwindPS 18.04.22"
+
 # List of OHM sensors to grab
 SENSORS = [
     'CPU Total/Load', 
@@ -161,7 +164,8 @@ SENSORS = [
 ]
 
 # Load json options
-SERVER_INFO = json.load(open('server.json'))
+SERVER_FILE = os.path.join(os.path.dirname(__file__), 'server.json')
+SERVER_INFO = json.load(open(SERVER_FILE))
 HOSTS = SERVER_INFO['hosts']
 
 # Refresh interval (seconds)
@@ -177,21 +181,28 @@ UPDATE_HOSTS = 30
 
 if __name__ == '__main__':
     try:
+        print("Initialising {}...".format(VERSION))
         # Get VM status
         if GET_HYPERV:
+            print("Getting Hyper-V VM information...")
             vm_counter = 0
             vm_status = vm_str()
 
         if GET_HOSTS:
+            print("Checking online status of hosts...")
             hosts_counter = 0
             hosts_status = hosts_str(HOSTS)
 
+        print("Entering TailwindPS...")
+        time.sleep(0.2)
         while True:
             # Get latest system info
             all_data = sysinfo.get_all()
 
             # Clear console
             cls()
+
+            print("{}\n".format(VERSION))
 
             if all_data:
                 # Print stats
