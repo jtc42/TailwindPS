@@ -85,7 +85,7 @@ def print_cpu(data, show_cores=True):
     # Print package info
     format_print([
         "Package",
-        "{:0>4} %".format(data['CPU Total/Load']), 
+        "{:04.1f} %".format(data['CPU Total/Load']), 
         "{:.2f} GHz".format(clock_package),
         "{} C".format(data['CPU Package/Temperature']),
     ])
@@ -97,14 +97,13 @@ def print_cpu(data, show_cores=True):
         for core_name in core_list:
             format_print([
                 core_name[4:],  # Strip "CPU" out of core name
-                "{:0>4} %".format(data['{}/Load'.format(core_name)]), 
+                "{:04.1f} %".format(data['{}/Load'.format(core_name)]), 
                 "{:.2f} GHz".format(data['{}/Clock'.format(core_name)]/1000),
                 "{} C".format(data['{}/Temperature'.format(core_name)]),
             ])
 
 # Print formatted GPU stats
 def print_gpu(data):
-
     format_print([
         "Load", 
         "VRAM",
@@ -113,7 +112,7 @@ def print_gpu(data):
     ], underline=True)
 
     format_print([
-        "{:0>4} %".format(data['GPU Core/Load']), 
+        "{:04.1f} %".format(data['GPU Core/Load']), 
         "{} %".format(data['GPU Memory/Load']),
         "{} GHz".format(data['GPU Core/Clock']),
         "{} C".format(data['GPU Core/Temperature']),
@@ -165,21 +164,74 @@ def hosts_str(host_list):
 
 # Get formatted string of Hyper-V stats
 def vm_str():
-    # TODO: Split and format VM output
-    process = subprocess.Popen('powershell.exe Get-VM', stdout=subprocess.PIPE, shell=True)
+    header_str = 'Name            State   CPUUsage(%) MemoryAssigned(M) Uptime           Status             Version'
+    error_str = 'Get-VM : You do not have the required permission to complete this task'
+
+    process = subprocess.Popen('powershell.exe Get-VM', stdout=subprocess.PIPE)
     stdout, err = process.communicate()
 
     if not err:
-        # Check for permission error
-        check_str = 'Get-VM : You do not have the required permission to complete this task'
-        if stdout.decode("utf-8").split('.')[0] != check_str:
-            return stdout.decode("utf-8")
+        out_raw = stdout.decode("utf-8")  # Decode output
+        out_lines = [i for i in out_raw.split('\r\n') if i !='']  # Split output by lines
+
+        if error_str in out_lines:  # If permissions error
+            print("You do not have the required permission to complete this task.")
+            return None
+        elif not header_str in out_lines:  # If no header is found
+            print("No valid Get-VM header found")
+            return None
+        else: 
+            header_index = out_lines.index(header_str)  # Get index of header
+            header_line = out_lines[header_index]  # Store header line string
+            header_vals = header_line.split()  # Store list of header values
+
+            column_indices = [header_line.find(val) for val in header_vals]  # Find start positions of each column
+            column_indices.append(-1)  # Add index marking end of line
+
+            data_lines = out_lines[header_index+2:]  # Cut out everything not data
+
+            hosts = []
+            for data_line in data_lines:  # For each VM
+                d = {}  #  Create empty dictionary
+                for i, header in enumerate(header_vals):  # For each column header
+                    d[header] = data_line[column_indices[i]:column_indices[i+1]].strip()  # Split by column index, and strip whitespace
+
+                hosts.append(d)  # Add dictionary to list of VM data
+
+            # Start building string
+            return_string = ""
+
+            return_string += format_print([
+                "Name", 
+                "CPU Load",
+                "Memory",
+                "Uptime",
+                #"Version",
+                "State",
+            ], fmt = "{: <16}", underline=True, rtn = True)
+
+            for host in hosts:
+                if host['State'] == 'Running':
+                    _status = Fore.GREEN + "Running" + Style.RESET_ALL
+                else:
+                    _status = Fore.RED + "Offline" + Style.RESET_ALL
+
+                return_string += format_print([
+                    "{}".format(host['Name']), 
+                    "{:04.1f} %".format(float(host['CPUUsage(%)'])), 
+                    "{} MB".format(host['MemoryAssigned(M)']), 
+                    "{}".format(host['Uptime'].split(".")[0]), 
+                    #"{}".format(host['Version']), 
+                    "{}".format(_status),
+                ], fmt = "{: <16}", rtn = True)
+
+            return return_string
 
 
 def print_shot(sys_data, storage_data, hosts_status, vm_status, show_cores=True):
     if sys_data:
         # Print stats
-        print("\n-------CPU------\n")
+        print("-------CPU------\n")
         print_cpu(sys_data, show_cores=show_cores)
 
         print("\n-------GPU------\n")
@@ -199,7 +251,7 @@ def print_shot(sys_data, storage_data, hosts_status, vm_status, show_cores=True)
 
     if vm_status:
         # Print last VM status
-        print("-----HYPERV-----")
+        print("-----HYPERV-----\n")
         if vm_status:
             print(vm_status)
         else:
@@ -209,7 +261,7 @@ def print_shot(sys_data, storage_data, hosts_status, vm_status, show_cores=True)
 ##### GLOBAL THINGS ######
 
 # Version name
-VERSION = "TailwindPS 18.04.22"
+VERSION = "TailwindPS 18.09.30"
 
 # List of OHM sensors to grab
 SENSORS = [
