@@ -165,6 +165,7 @@ def hosts_str(host_list):
 
 # Get formatted string of Hyper-V stats
 def vm_str():
+    # TODO: Split and format VM output
     process = subprocess.Popen('powershell.exe Get-VM', stdout=subprocess.PIPE, shell=True)
     stdout, err = process.communicate()
 
