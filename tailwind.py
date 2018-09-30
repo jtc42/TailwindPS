@@ -4,10 +4,10 @@ import os
 import subprocess
 import numpy as np
 import json
+import argparse
 
-from tools import sysinfo
-from tools import netscan
- 
+from tools import sysinfo, netscan, diskscan
+
 from colorama import init, Fore, Back, Style
 
 init()  # Colorama init
@@ -59,29 +59,48 @@ def print_ram(data):
 
 
 # Print formatted CPU stats
-def print_cpu(data):
-    clock_sensors = [
-        'CPU Core #1/Clock',
-        'CPU Core #2/Clock',
-        'CPU Core #3/Clock',
-        'CPU Core #4/Clock',
-    ]
+def print_cpu(data, show_cores=True):
+    core_list = []
 
-    clocks = [data[core] for core in clock_sensors]
-    clock_package = round(np.average(clocks)/1000, 2)
+    # Add all available CPU core info
+    n_core = 1  # Initial CPU core
+    while "CPU Core #{}/Load".format(n_core) in data:  # Iterate over all cores
+        core_list.append("CPU Core #{}".format(n_core))
+        n_core = n_core + 1
 
+    # Create list of clockspeed sensors
+    clock_sensors = ['{}/Clock'.format(core_name) for core_name in core_list]
+
+    # Calculate a package clock 
+    clock_package = np.average([data[core] for core in clock_sensors])/1000
+
+    # Print headings
     format_print([
+        "Core",
         "Load", 
         "Clock",
         "Temperature",
     ], underline=True)
 
+    # Print package info
     format_print([
-        "{:0>4} %".format(round(data['CPU Total/Load'], 1)), 
-        "{} GHz".format(clock_package),
+        "Package",
+        "{:0>4} %".format(data['CPU Total/Load']), 
+        "{:.2f} GHz".format(clock_package),
         "{} C".format(data['CPU Package/Temperature']),
     ])
 
+    if show_cores:
+        print('')
+
+        # Print individual cores
+        for core_name in core_list:
+            format_print([
+                core_name[4:],  # Strip "CPU" out of core name
+                "{:0>4} %".format(data['{}/Load'.format(core_name)]), 
+                "{:.2f} GHz".format(data['{}/Clock'.format(core_name)]/1000),
+                "{} C".format(data['{}/Temperature'.format(core_name)]),
+            ])
 
 # Print formatted GPU stats
 def print_gpu(data):
@@ -100,6 +119,22 @@ def print_gpu(data):
         "{} C".format(data['GPU Core/Temperature']),
     ])
 
+# Print formatted STORAGE stats
+def print_storage(data):
+    format_print([
+        "Drive",
+        "Free",
+        "Used", 
+        "Total",
+    ], underline=True)
+
+    for d in data:
+        format_print([
+            "{}".format(d['device']), 
+            "{:.0f} GB".format(d['free']), 
+            "{:.0f} GB".format(d['used']), 
+            "{:.0f} GB".format(d['total']), 
+        ])
 
 # Get formatted string of host stats
 def hosts_str(host_list):
@@ -140,6 +175,36 @@ def vm_str():
             return stdout.decode("utf-8")
 
 
+def print_shot(sys_data, storage_data, hosts_status, vm_status, show_cores=True):
+    if sys_data:
+        # Print stats
+        print("\n-------CPU------\n")
+        print_cpu(sys_data, show_cores=show_cores)
+
+        print("\n-------GPU------\n")
+        print_gpu(sys_data)
+
+        print("\n-------MEM------\n")
+        print_ram(sys_data)
+
+    if storage_data:
+        print("\n-----STORAGE----\n")
+        print_storage(storage_data)
+
+    if hosts_status:
+        # Print last hosts status
+        print("\n------HOSTS-----\n")  
+        print(hosts_status)
+
+    if vm_status:
+        # Print last VM status
+        print("-----HYPERV-----")
+        if vm_status:
+            print(vm_status)
+        else:
+            print("\nHyper-V not available. Ensure you're running as administrator.")
+
+
 ##### GLOBAL THINGS ######
 
 # Version name
@@ -174,76 +239,83 @@ INTERVAL = 1
 # Get info or not
 GET_HYPERV = True
 GET_HOSTS = True
+GET_STORAGE = True
+SHOW_CORES = True
 
 # Update info every n ticks
 UPDATE_HYPERV = 30
 UPDATE_HOSTS = 30
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-r', '--reload', action='store_true')
+    parser.add_argument('-s', '--simple', action='store_true')
+
+    args = parser.parse_args()
+
+    if args.simple:
+        GET_HYPERV = False
+        GET_HOSTS = False
+        GET_STORAGE = False
+        SHOW_CORES = False
+
     try:
         print("Initialising {}...".format(VERSION))
-        # Get VM status
+        # Get initial VM status
         if GET_HYPERV:
-            print("Getting Hyper-V VM information...")
             vm_counter = 0
             vm_status = vm_str()
+        else:
+            vm_status = None
 
+        # Get initial hosts status
         if GET_HOSTS:
-            print("Checking online status of hosts...")
             hosts_counter = 0
             hosts_status = hosts_str(HOSTS)
+        else:
+            hosts_status = None
+        
+        # Get storage data
+        if GET_STORAGE:
+            storage_data = diskscan.get_all()
+        else:
+            storage_data = None
 
         print("Entering TailwindPS...")
         time.sleep(0.2)
-        while True:
+
+        if args.reload:
+            while True:
+                # Get latest system info
+                sys_data = sysinfo.get_all()
+
+                if GET_HOSTS:
+                    if hosts_counter < UPDATE_HOSTS:
+                        hosts_counter += 1
+                    else:
+                        # Update VM status
+                        hosts_status = hosts_str(HOSTS)
+                        hosts_counter = 0
+
+                if GET_HYPERV:
+                    if vm_counter < UPDATE_HYPERV:
+                        vm_counter += 1
+                    else:
+                        # Update VM status
+                        vm_status = vm_str()
+                        vm_counter = 0
+
+                # Print output
+                cls()
+                print("{}\n".format(VERSION))
+                print_shot(sys_data, storage_data, hosts_status, vm_status, show_cores=SHOW_CORES)
+
+                # Pause
+                time.sleep(INTERVAL)
+        else:
             # Get latest system info
-            all_data = sysinfo.get_all()
-
-            # Clear console
-            cls()
-
-            print("{}\n".format(VERSION))
-
-            if all_data:
-                # Print stats
-                print("\n-------CPU------\n")
-                print_cpu(all_data)
-
-                print("\n-------GPU------\n")
-                print_gpu(all_data)
-
-                print("\n-------MEM------\n")
-                print_ram(all_data)
-
-            if GET_HOSTS:
-                # Print last hosts status
-                print("\n------HOSTS-----\n")  
-                print(hosts_status)
-
-                if hosts_counter < UPDATE_HOSTS:
-                    hosts_counter += 1
-                else:
-                    # Update VM status
-                    hosts_status = hosts_str(HOSTS)
-                    hosts_counter = 0
-
-            if GET_HYPERV:
-                
-                # Print last VM status
-                print("\n-----HYPERV-----")
-                if vm_status:
-                    print(vm_status)
-                else:
-                    print("Hyper-V not available. Ensure you're running as administrator.")
-
-                if vm_counter < UPDATE_HYPERV:
-                    vm_counter += 1
-                else:
-                    # Update VM status
-                    vm_status = vm_str()
-                    vm_counter = 0
-
-            time.sleep(INTERVAL)
+            sys_data = sysinfo.get_all()
+            print_shot(sys_data, storage_data, hosts_status, vm_status, show_cores=SHOW_CORES)
 
     except KeyboardInterrupt:
         pass
