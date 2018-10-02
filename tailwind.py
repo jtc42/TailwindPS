@@ -15,51 +15,64 @@ init()  # Colorama init
 # Clear screen
 def cls():
     os.system('cls' if os.name=='nt' else 'clear')
+    
+# Print header format
+def hdrprint(msg, length=28, char="-", col=Fore.CYAN, style=Style.BRIGHT):
+    print(col + style + '{0:{char}^{length}}'.format(msg, length=length, char=char) + Style.RESET_ALL)
+    
+# Print string with a fixed width buffer, for overwriting stdout lines
+def padprint(msg, len=50):
+    print(msg.ljust(50), end='\r')  # Print loading line
 
+# Overwrite previous padprint with empty space, to avoid mashing if next print is shorter
+def padflush(len=50):
+    padprint("", len=len)
+    
+# Just print without a newline
+def nprint(msg):
+    print(msg, end="")
 
 # Print, or return string, with formatted spacing/padding
-def format_print(items, fmt = "{: <12}", underline=False, rtn = False):
+def format_cols(items, fmt = "{: <12}", underline=False):
     base_str = ""
     rtn_string = ""
+
     for i, string in enumerate(items):
         base_str += fmt
 
-    if rtn:
-        rtn_string += base_str.format(*items) + "\n"
-    else:
-        print(base_str.format(*items))
+    rtn_string += base_str.format(*items)
 
     if underline:
+        rtn_string += "\n"
         items_underline = items
         for i, string in enumerate(items_underline):
             items_underline[i] = '-' * len(string)
 
-        if rtn:
-            rtn_string += base_str.format(*items_underline) + "\n"
-        else:
-            print(base_str.format(*items_underline))
-    
-    if rtn:
-        return rtn_string
+        rtn_string += base_str.format(*items_underline) + "\n"
 
+    return rtn_string
 
 # Print formatted RAM stats
-def print_ram(data):
-    format_print([
+def mem_str(data):
+    return_string = ""
+    return_string += format_cols([
         "Load",
         "Used", 
         "Total",
     ], underline=True)
 
-    format_print([
+    return_string += format_cols([
         "{:0>4} % ".format(round(data['Used Memory/Data']/(data['Used Memory/Data']+data['Available Memory/Data'])*100, 1)),
         "{} GB".format(data['Used Memory/Data']), 
         "{} GB".format(round(data['Used Memory/Data']+data['Available Memory/Data'], 2)),
     ])
-
+    return_string += "\n"
+    return return_string
 
 # Print formatted CPU stats
-def print_cpu(data, show_cores=True):
+def cpu_str(data, show_cores=True):
+    return_string = ""
+
     core_list = []
 
     # Add all available CPU core info
@@ -75,7 +88,7 @@ def print_cpu(data, show_cores=True):
     clock_package = np.average([data[core] for core in clock_sensors])/1000
 
     # Print headings
-    format_print([
+    return_string += format_cols([
         "Core",
         "Load", 
         "Clock",
@@ -83,7 +96,7 @@ def print_cpu(data, show_cores=True):
     ], underline=True)
 
     # Print package info
-    format_print([
+    return_string += format_cols([
         "Package",
         "{:04.1f} %".format(data['CPU Total/Load']), 
         "{:.2f} GHz".format(clock_package),
@@ -91,36 +104,44 @@ def print_cpu(data, show_cores=True):
     ])
 
     if show_cores:
-        print('')
+        return_string += "\n"
 
         # Print individual cores
         for core_name in core_list:
-            format_print([
+            return_string += format_cols([
                 core_name[4:],  # Strip "CPU" out of core name
                 "{:04.1f} %".format(data['{}/Load'.format(core_name)]), 
                 "{:.2f} GHz".format(data['{}/Clock'.format(core_name)]/1000),
                 "{} C".format(data['{}/Temperature'.format(core_name)]),
             ])
+            return_string += "\n"
+
+    return return_string
 
 # Print formatted GPU stats
-def print_gpu(data):
-    format_print([
+def gpu_str(data):
+    return_string = ""
+    return_string += format_cols([
         "Load", 
         "VRAM",
         "Clock",
         "Temperature",
     ], underline=True)
 
-    format_print([
+    return_string += format_cols([
         "{:04.1f} %".format(data['GPU Core/Load']), 
         "{} %".format(data['GPU Memory/Load']),
         "{} GHz".format(data['GPU Core/Clock']),
         "{} C".format(data['GPU Core/Temperature']),
     ])
+    return_string += "\n"
+    return return_string
 
 # Print formatted STORAGE stats
-def print_storage(data):
-    format_print([
+def storage_str(data):
+    return_string = ""
+
+    return_string += format_cols([
         "Drive",
         "Free",
         "Used", 
@@ -128,12 +149,14 @@ def print_storage(data):
     ], underline=True)
 
     for d in data:
-        format_print([
+        return_string += format_cols([
             "{}".format(d['device']), 
             "{:.0f} GB".format(d['free']), 
             "{:.0f} GB".format(d['used']), 
             "{:.0f} GB".format(d['total']), 
         ])
+        return_string += "\n"
+    return return_string
 
 # Get formatted string of host stats
 def hosts_str(host_list):
@@ -141,24 +164,24 @@ def hosts_str(host_list):
 
     return_string = ""
 
-    return_string += format_print([
+    return_string += format_cols([
         "Name", 
         "URL",
         "Status",
-    ], fmt = "{: <32}", underline=True, rtn = True)
+    ], fmt = "{: <32}", underline=True)
 
     for host in hosts:
         if host['online']:
-            _status = Fore.GREEN + "Online" + Style.RESET_ALL
+            _status = Fore.GREEN + "Online" + Fore.RESET
         else:
-            _status = Fore.RED + "Offline" + Style.RESET_ALL
+            _status = Fore.RED + "Offline" + Fore.RESET
 
-        return_string += format_print([
+        return_string += format_cols([
             "{}".format(host['name']), 
             "{}".format(host['url']),
             "{}".format(_status),
-        ], fmt = "{: <32}", rtn = True)
-
+        ], fmt = "{: <32}")
+        return_string += "\n"
     return return_string
 
 
@@ -204,59 +227,66 @@ def vm_str():
             # Start building string
             return_string = ""
 
-            return_string += format_print([
+            return_string += format_cols([
                 "Name", 
                 "CPU Load",
                 "Memory",
                 "Uptime",
-                #"Version",
                 "State",
-            ], fmt = "{: <16}", underline=True, rtn = True)
+            ], fmt = "{: <16}", underline=True)
 
             for host in hosts:
+                # Format online status
                 if host['State'] == 'Running':
-                    _status = Fore.GREEN + "Running" + Style.RESET_ALL
+                    _status = Fore.GREEN + "Running" + Fore.RESET
                 else:
-                    _status = Fore.RED + "Offline" + Style.RESET_ALL
+                    _status = Fore.RED + "Offline" + Fore.RESET
 
-                return_string += format_print([
+                # Create uptime string
+                uptime_arr = host['Uptime'].split(".")
+                if len(uptime_arr) == 1 or len(uptime_arr) == 2:
+                    uptime = uptime_arr[0]
+                elif len(uptime_arr) == 3:
+                    uptime = "{}d {}".format(*uptime_arr[:2])
+                
+                return_string += format_cols([
                     "{}".format(host['Name']), 
                     "{:04.1f} %".format(float(host['CPUUsage(%)'])), 
                     "{} MB".format(host['MemoryAssigned(M)']), 
-                    "{}".format(host['Uptime'].split(".")[0]), 
-                    #"{}".format(host['Version']), 
+                    "{}".format(uptime),  
                     "{}".format(_status),
-                ], fmt = "{: <16}", rtn = True)
+                ], fmt = "{: <16}")
+                return_string += "\n"
 
             return return_string
 
 
-def print_shot(sys_data, storage_data, hosts_status, vm_status, show_cores=True):
+def print_shot(sys_data, storage_status, hosts_status, vm_status, show_cores=True):
     if sys_data:
         # Print stats
-        print("-------CPU------\n")
-        print_cpu(sys_data, show_cores=show_cores)
+        hdrprint("CPU")
+        nprint(cpu_str(sys_data, show_cores=show_cores))
 
-        print("\n-------GPU------\n")
-        print_gpu(sys_data)
+        hdrprint("GPU")
+        nprint(gpu_str(sys_data))
 
-        print("\n-------MEM------\n")
-        print_ram(sys_data)
+        hdrprint("MEM")
+        nprint(mem_str(sys_data))
 
-    if storage_data:
-        print("\n-----STORAGE----\n")
-        print_storage(storage_data)
+    if storage_status:
+        hdrprint("DRV")
+        nprint(storage_status)
 
     if hosts_status:
         # Print last hosts status
-        print("\n------HOSTS-----\n")  
-        print(hosts_status)
+        hdrprint("SVR")
+        nprint(hosts_status)  # Use 'end' to stop default newline, replaced by Fore.RESET
 
     if vm_status:
         # Print last VM status
-        print("-----HYPERV-----\n")
+        hdrprint("HVM")
         if vm_status:
-            print(vm_status)
+            nprint(vm_status)
         else:
             print("\nHyper-V not available. Ensure you're running as administrator.")
 
@@ -303,6 +333,8 @@ UPDATE_HYPERV = 30
 UPDATE_HOSTS = 30
 
 if __name__ == '__main__':
+    padprint("Initialising {}...".format(VERSION))
+    
     parser = argparse.ArgumentParser()
     parser.add_argument('-r', '--reload', action='store_true')
     parser.add_argument('-s', '--simple', action='store_true')
@@ -316,9 +348,14 @@ if __name__ == '__main__':
         SHOW_CORES = False
 
     try:
-        print("Initialising {}...".format(VERSION))
+    
+        # Get latest system info
+        padprint("Scanning hardware status...")
+        sys_data = sysinfo.get_all()
+        
         # Get initial VM status
         if GET_HYPERV:
+            padprint("Scanning for Hyper-V VMs...")
             vm_counter = 0
             vm_status = vm_str()
         else:
@@ -326,6 +363,7 @@ if __name__ == '__main__':
 
         # Get initial hosts status
         if GET_HOSTS:
+            padprint("Scanning web hosts...")
             hosts_counter = 0
             hosts_status = hosts_str(HOSTS)
         else:
@@ -333,18 +371,15 @@ if __name__ == '__main__':
         
         # Get storage data
         if GET_STORAGE:
-            storage_data = diskscan.get_all()
+            padprint("Scanning storage devices...")
+            storage_status = storage_str(diskscan.get_all())
         else:
-            storage_data = None
+            storage_status = None
 
-        print("Entering TailwindPS...")
-        time.sleep(0.2)
+        padflush()
 
         if args.reload:
             while True:
-                # Get latest system info
-                sys_data = sysinfo.get_all()
-
                 if GET_HOSTS:
                     if hosts_counter < UPDATE_HOSTS:
                         hosts_counter += 1
@@ -364,14 +399,15 @@ if __name__ == '__main__':
                 # Print output
                 cls()
                 print("{}\n".format(VERSION))
-                print_shot(sys_data, storage_data, hosts_status, vm_status, show_cores=SHOW_CORES)
+                print_shot(sys_data, storage_status, hosts_status, vm_status, show_cores=SHOW_CORES)
 
                 # Pause
                 time.sleep(INTERVAL)
+                
+                # Get latest system info
+                sys_data = sysinfo.get_all()
         else:
-            # Get latest system info
-            sys_data = sysinfo.get_all()
-            print_shot(sys_data, storage_data, hosts_status, vm_status, show_cores=SHOW_CORES)
+            print_shot(sys_data, storage_status, hosts_status, vm_status, show_cores=SHOW_CORES)
 
     except KeyboardInterrupt:
         pass
