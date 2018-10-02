@@ -164,7 +164,7 @@ def hosts_str(host_list):
 
 # Get formatted string of Hyper-V stats
 def vm_str():
-    header_str = 'Name            State   CPUUsage(%) MemoryAssigned(M) Uptime           Status             Version'
+    header_str = 'NameStateCPUUsage(%)MemoryAssigned(M)UptimeStatusVersion'
     error_str = 'Get-VM : You do not have the required permission to complete this task'
 
     process = subprocess.Popen('powershell.exe Get-VM', stdout=subprocess.PIPE)
@@ -173,16 +173,19 @@ def vm_str():
     if not err:
         out_raw = stdout.decode("utf-8")  # Decode output
         out_lines = [i for i in out_raw.split('\r\n') if i !='']  # Split output by lines
+        
+        out_lines_nospace = [s.replace(" ", "") for s in out_lines]  # Out lines with all spaces stripped out
 
         if error_str in out_lines:  # If permissions error
             print("You do not have the required permission to complete this task.")
             return None
-        elif not header_str in out_lines:  # If no header is found
+        elif not header_str in out_lines_nospace:  # If no header is found
             print("No valid Get-VM header found")
+            print(out_lines)
             return None
         else: 
-            header_index = out_lines.index(header_str)  # Get index of header
-            header_line = out_lines[header_index]  # Store header line string
+            header_index = out_lines_nospace.index(header_str)  # Get line index of header
+            header_line = out_lines[header_index]  # Store header (including spaces) string
             header_vals = header_line.split()  # Store list of header values
 
             column_indices = [header_line.find(val) for val in header_vals]  # Find start positions of each column
