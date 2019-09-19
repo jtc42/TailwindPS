@@ -1,4 +1,4 @@
-# TailwindPS
+# tailwind.py
 Console-based system stats based loosely on Tailwind code
 
 ## Requirements
